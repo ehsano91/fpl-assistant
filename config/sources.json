@@ -1,0 +1,91 @@
+{
+  "_readme": "FPL Assistant qualitative signal sources. Set enabled=true to activate a source. Sources that fail (network error, wrong URL) are skipped gracefully.",
+
+  "sources": [
+
+    {
+      "id": "bbc_sport_football",
+      "name": "BBC Sport Football",
+      "type": "rss",
+      "url": "https://feeds.bbci.co.uk/sport/football/rss.xml",
+      "enabled": true,
+      "description": "Live injury updates, team news, and transfer headlines from BBC Sport"
+    },
+
+    {
+      "id": "guardian_football",
+      "name": "The Guardian Football",
+      "type": "rss",
+      "url": "https://www.theguardian.com/football/rss",
+      "enabled": true,
+      "description": "Football analysis, previews, and injury news from The Guardian"
+    },
+
+    {
+      "id": "lets_talk_fpl",
+      "name": "LetsTalkFPL (YouTube)",
+      "type": "youtube_rss",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCxeOc7eFxq37yW_Nc-69deA",
+      "enabled": true,
+      "description": "GW preview and player analysis videos from LetsTalkFPL"
+    },
+
+    {
+      "id": "fpl_mate",
+      "name": "FPL Mate (YouTube)",
+      "type": "youtube_rss",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCweDAlFm2LnVcOqaFU4_AGA",
+      "enabled": true,
+      "description": "FPL tips, captain picks, and transfer advice"
+    },
+
+    {
+      "id": "fpl_general",
+      "name": "FPL General (YouTube)",
+      "type": "youtube_rss",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCxj4WVoWBuwXPGJsvUFPVig",
+      "enabled": true,
+      "description": "GW previews and FPL community discussion from FPL General"
+    },
+
+    {
+      "id": "fmttm",
+      "name": "FMTTM (YouTube)",
+      "type": "youtube_rss",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=REPLACE_WITH_CHANNEL_ID",
+      "enabled": false,
+      "description": "From the Mouth of a Trout — detailed FPL analysis videos",
+      "note": "Could not auto-detect channel ID. Visit https://www.youtube.com/@FMTTM, right-click → View Page Source, search for 'externalId' and paste the UC... value above, then set enabled=true."
+    },
+
+    {
+      "id": "fpl_pod",
+      "name": "FPL Pod (Official PL Podcast)",
+      "type": "podcast_rss",
+      "url": "https://audioboom.com/channels/5001585.rss",
+      "enabled": true,
+      "description": "Official Premier League FPL podcast with Kelly Somers, Julien Laurens and Sam Bonfield"
+    },
+
+    {
+      "id": "fpl_cast",
+      "name": "FPL Cast (Podcast)",
+      "type": "podcast_rss",
+      "url": "REPLACE_WITH_RSS_URL",
+      "enabled": false,
+      "description": "FPL Cast podcast — weekly analysis and community debate",
+      "note": "Could not find RSS URL automatically. Visit their podcast page and look for the RSS feed link, then paste it above and set enabled=true."
+    },
+
+    {
+      "id": "pl_press_conferences",
+      "name": "Premier League Press Conferences",
+      "type": "web_scrape",
+      "url": "https://www.premierleague.com/news",
+      "enabled": false,
+      "description": "Manager press conference summaries from the official PL website",
+      "note": "The PL website uses JavaScript rendering. Disabled by default."
+    }
+
+  ]
+}
