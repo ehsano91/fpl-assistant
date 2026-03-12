@@ -15,6 +15,7 @@ engine/api_server.log
 # Node / frontend
 fpl-help-main/node_modules/
 fpl-help-main/dist/
+fpl-help-main/.vite/
 fpl-help-main/.env
 fpl-help-main/.env.local
 

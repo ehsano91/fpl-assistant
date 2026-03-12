@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 213 56% 11%;
+    --foreground: 0 0% 100%;
+
+    --card: 211 52% 24%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 211 52% 24%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 153 100% 50%;
+    --primary-foreground: 213 56% 11%;
+
+    --secondary: 211 52% 30%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 211 30% 20%;
+    --muted-foreground: 207 25% 70%;
+
+    --accent: 153 100% 50%;
+    --accent-foreground: 213 56% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 211 40% 28%;
+    --input: 211 40% 28%;
+    --ring: 153 100% 50%;
+
+    --radius: 0.75rem;
+
+    --pitch: 142 60% 35%;
+    --pitch-light: 142 55% 42%;
+    --caution: 38 100% 50%;
+    --danger: 0 84% 55%;
+    --teal: 170 80% 45%;
+
+    --sidebar-background: 213 56% 11%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 153 100% 50%;
+    --sidebar-primary-foreground: 213 56% 11%;
+    --sidebar-accent: 211 52% 24%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 211 40% 28%;
+    --sidebar-ring: 153 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer utilities {
+  .pill-card {
+    @apply bg-card rounded-xl px-3 py-2 shadow-lg shadow-black/20;
+  }
+  .nav-active {
+    @apply text-primary;
+  }
+  .nav-inactive {
+    @apply text-muted-foreground;
+  }
+  .gradient-teal {
+    border-left: 4px solid hsl(var(--teal));
+  }
+  .gradient-caution {
+    border-left: 4px solid hsl(var(--caution));
+  }
+}
