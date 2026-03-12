@@ -4,6 +4,9 @@ db/fpl.db
 # API key — never commit
 .env
 
+# Pipeline lock file (runtime artifact)
+.pipeline_running
+
 # Python cache
 __pycache__/
 *.py[cod]

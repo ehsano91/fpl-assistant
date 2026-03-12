@@ -1,17 +1,50 @@
 import { useAppData } from "@/context/AppDataContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { API_BASE } from "@/lib/api";
 
 export default function DataTab() {
   const { dataSources, lastRefresh } = useAppData();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stop polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const handleRefresh = async () => {
+    if (refreshing) return;
     setRefreshing(true);
-    await queryClient.invalidateQueries();
-    setRefreshing(false);
+    setStatusMsg("Starting pipeline…");
+
+    try {
+      await fetch(`${API_BASE}/refresh`, { method: "POST" });
+    } catch {
+      setRefreshing(false);
+      setStatusMsg("Could not reach server.");
+      return;
+    }
+
+    setStatusMsg("Fetching FPL data…");
+
+    // Poll /status every 3s until pipelineRunning goes false
+    pollRef.current = setInterval(async () => {
+      try {
+        const res  = await fetch(`${API_BASE}/status`);
+        const data = await res.json();
+        if (!data.pipelineRunning) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          await queryClient.invalidateQueries();
+          setRefreshing(false);
+          setStatusMsg("");
+        }
+      } catch {
+        // server temporarily busy — keep polling
+      }
+    }, 3000);
   };
 
   return (
@@ -50,7 +83,7 @@ export default function DataTab() {
         className="w-full py-3 rounded-xl bg-teal text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-        {refreshing ? "Refreshing…" : "Refresh Now"}
+        {refreshing ? (statusMsg || "Refreshing…") : "Refresh Now"}
       </button>
 
       <p className="text-center text-[10px] text-muted-foreground">

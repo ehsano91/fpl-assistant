@@ -23,6 +23,8 @@ import os
 import json
 import sqlite3
 import time
+import threading
+import subprocess
 import urllib.request
 import urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -1089,12 +1091,59 @@ def handle_status(conn):
         "lastRefresh":         last_run,
         "lastRefreshRelative": relative,
         "sources":             sources,
+        "pipelineRunning":     _pipeline_is_running(),
     }
 
 
 # ---------------------------------------------------------------------------
-# HTTP request handler
+# Pipeline refresh state + POST /refresh handler
 # ---------------------------------------------------------------------------
+# Use a lock file so the "running" flag survives server restarts.
+
+_PROJECT_ROOT       = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_PIPELINE_LOCK_FILE = os.path.join(_PROJECT_ROOT, ".pipeline_running")
+_pipeline_lock      = threading.Lock()
+
+
+def _pipeline_is_running():
+    """True if the lock file exists and is less than 10 minutes old."""
+    if not os.path.exists(_PIPELINE_LOCK_FILE):
+        return False
+    age = time.time() - os.path.getmtime(_PIPELINE_LOCK_FILE)
+    return age < 600   # auto-expire after 10 min in case of crash
+
+
+def _run_pipeline():
+    scripts = [
+        os.path.join(_PROJECT_ROOT, "engine", "fetch_fpl.py"),
+        os.path.join(_PROJECT_ROOT, "engine", "model.py"),
+        os.path.join(_PROJECT_ROOT, "engine", "qualitative.py"),
+    ]
+    try:
+        for script in scripts:
+            result = subprocess.run(
+                [sys.executable, script],
+                cwd=_PROJECT_ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if result.returncode != 0:
+                break
+    finally:
+        try:
+            os.remove(_PIPELINE_LOCK_FILE)
+        except FileNotFoundError:
+            pass
+
+
+def handle_refresh():
+    with _pipeline_lock:
+        if _pipeline_is_running():
+            return {"status": "running"}
+        open(_PIPELINE_LOCK_FILE, "w").close()   # create lock file
+    threading.Thread(target=_run_pipeline, daemon=True).start()
+    return {"status": "started"}
+
 
 class FPLHandler(BaseHTTPRequestHandler):
     """Routes every GET request to the correct endpoint handler."""
@@ -1179,6 +1228,13 @@ class FPLHandler(BaseHTTPRequestHandler):
             print(f"  [ERROR] {exc}")
             traceback.print_exc()
             self.send_json({"error": str(exc)}, 500)
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        if path == "/refresh":
+            self.send_json(handle_refresh())
+        else:
+            self.send_json({"error": "Unknown endpoint"}, 404)
 
 
 # ---------------------------------------------------------------------------
