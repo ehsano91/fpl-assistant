@@ -347,6 +347,7 @@ def handle_squad(conn, gw=None):
             "opponent":        p["opponent"],
             "isHome":          bool(p["is_home"]) if p["is_home"] is not None else None,
             "fdr":             fdr,
+            "price":             round((p["now_cost"] or 0) / 10, 1),
             "costChangeEvent":   p["cost_change_event"] or 0,
             "costChangeStart":   p["cost_change_start"] or 0,
             "transfersInEvent":  p["transfers_in_event"] or 0,
@@ -378,6 +379,13 @@ def handle_squad(conn, gw=None):
         result["isHistorical"] = True
     elif is_planning:
         result["isPlanning"] = True
+
+    try:
+        entry_data = _fetch_fpl_live(f"{FPL_ENTRY}/")
+        itb = round((entry_data.get("last_deadline_bank") or 0) / 10, 1)
+    except Exception:
+        itb = 0.0
+    result["itb"] = itb
 
     return result
 

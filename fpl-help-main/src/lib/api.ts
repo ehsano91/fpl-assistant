@@ -31,6 +31,7 @@ export interface Player {
   opponent?:       string | null;   // opponent short name for upcoming fixture
   isHome?:         boolean | null;
   fdr?:            number | null;   // 1–5 official FPL difficulty
+  price?:             number;
   costChangeEvent?:   number;
   costChangeStart?:   number;
   transfersInEvent?:  number;
@@ -45,6 +46,7 @@ export interface SquadResponse {
   isHistorical?: boolean;
   isPlanning?:   boolean;      // true when viewing a future (unplayed) GW
   squadValue?:   number;
+  itb?:          number;
 }
 
 export interface GWHistory {

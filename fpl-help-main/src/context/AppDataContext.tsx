@@ -11,7 +11,7 @@ export interface PlanState {
   captainId:     number;
   viceCaptainId: number;
   starterIds:    number[];   // 11 player IDs in starter positions
-  transfers:     { out: number; in: number }[];
+  transfers:     { out: number; in: number; inPlayer?: PoolPlayer }[];
 }
 
 interface AppData {
@@ -50,6 +50,8 @@ interface AppData {
   resetPlanForGW:  (gw: number) => void;
   // Squad value
   squadValue:      number;
+  // Budget
+  itb:             number;
 }
 
 const AppDataContext = createContext<AppData>({
@@ -65,6 +67,7 @@ const AppDataContext = createContext<AppData>({
   isPlanning: false, planningState: {}, setPlanForGW: () => {}, resetPlanForGW: () => {},
   communityHeadlines: [], hotPlayers: [], squadWatch: [],
   squadValue: 0,
+  itb: 0,
 });
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -138,6 +141,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     resetPlanForGW,
     // Squad value
     squadValue:    squad.data?.squadValue  ?? 0,
+    // Budget
+    itb:           squad.data?.itb         ?? 0,
   };
 
   return (

@@ -73,17 +73,33 @@ function TransferModal({
   outPlayer,
   playerPool,
   squadIds,
+  squadPlayers,
   onSelect,
   onClose,
 }: {
   outPlayer: Player;
   playerPool: PoolPlayer[];
   squadIds: number[];
+  squadPlayers: Player[];
   onSelect: (p: PoolPlayer) => void;
   onClose: () => void;
 }) {
+  // Count team members in effective squad, excluding the outgoing player's slot
+  const teamCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of squadPlayers) {
+      if (p.id === outPlayer.id) continue;
+      counts[p.team] = (counts[p.team] ?? 0) + 1;
+    }
+    return counts;
+  }, [squadPlayers, outPlayer.id]);
+
   const filtered = playerPool
-    .filter(p => p.position === outPlayer.position && !squadIds.includes(p.id))
+    .filter(p =>
+      p.position === outPlayer.position &&
+      !squadIds.includes(p.id) &&
+      (teamCounts[p.team] ?? 0) < 3
+    )
     .sort((a, b) => b.xP - a.xP);
 
   return (
@@ -103,24 +119,32 @@ function TransferModal({
           {filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-6">No players available</p>
           )}
-          {filtered.map(p => (
-            <button
-              key={p.id}
-              onClick={() => { onSelect(p); onClose(); }}
-              className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors"
-            >
-              <JerseyImg teamCode={p.teamCode} position={p.position} size={36} />
-              <div className="flex-1 text-left min-w-0">
-                <p className="text-sm font-semibold truncate">{p.name}</p>
-                <p className="text-[11px] text-muted-foreground">{p.team}</p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-xs font-semibold">£{p.price}m</p>
-                <p className="text-xs text-primary font-bold">{p.xP} xP</p>
-                <PriceChange delta={p.costChangeEvent ?? 0} />
-              </div>
-            </button>
-          ))}
+          {filtered.map(p => {
+            const count = teamCounts[p.team] ?? 0;
+            return (
+              <button
+                key={p.id}
+                onClick={() => { onSelect(p); onClose(); }}
+                className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors"
+              >
+                <JerseyImg teamCode={p.teamCode} position={p.position} size={36} />
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-semibold truncate">{p.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] text-muted-foreground">{p.team}</p>
+                    {count >= 2 && (
+                      <span className="text-[10px] text-muted-foreground/60">{count}/3</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs font-semibold">£{p.price}m</p>
+                  <p className="text-xs text-primary font-bold">{p.xP} xP</p>
+                  <PriceChange delta={p.costChangeEvent ?? 0} />
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -165,6 +189,7 @@ function poolPlayerToPlayer(pp: PoolPlayer): Player {
     opponent:         null,
     isHome:           null,
     fdr:              null,
+    price:            pp.price,
     costChangeEvent:  pp.costChangeEvent,
     costChangeStart:  pp.costChangeStart,
     transfersInEvent: pp.transfersInEvent,
@@ -287,7 +312,7 @@ export default function MyTeamTab() {
     selectedGW, currentGW, gwPoints,
     totalPoints, overallRank, swedenRank, leagues,
     isPlanning, planningState, setPlanForGW, resetPlanForGW,
-    playerPool,
+    playerPool, itb,
   } = useAppData();
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -296,6 +321,8 @@ export default function MyTeamTab() {
   const [swapError, setSwapError]           = useState(false);
   const [transferModal, setTransferModal]   = useState<Player | null>(null);
   const [pricePopover, setPricePopover]     = useState<Player | null>(null);
+  const [saveErrors, setSaveErrors]         = useState<string[]>([]);
+  const [savedGW, setSavedGW]               = useState<number | null>(null);
 
   const displayGW    = selectedGW ?? currentGW ?? gameweek;
   const isHistorical = selectedGW !== null && !isPlanning;
@@ -312,13 +339,14 @@ export default function MyTeamTab() {
   const activePlan = isPlanning ? (planningState[displayGW] ?? null) : null;
 
   // Apply transfers to get the effective 15-player list
+  // Uses stored inPlayer first (fixes GK bug), falls back to playerPool lookup for legacy plans
   const effectivePlayers = useMemo(() => {
     if (!isPlanning || !activePlan) return allPlayers;
     const transfers = activePlan.transfers ?? [];
     return allPlayers.map(p => {
       const tx = transfers.find(t => t.out === p.id);
       if (tx) {
-        const incoming = playerPool.find(pp => pp.id === tx.in);
+        const incoming = tx.inPlayer ?? playerPool.find(pp => pp.id === tx.in);
         if (incoming) return poolPlayerToPlayer(incoming);
       }
       return p;
@@ -352,6 +380,27 @@ export default function MyTeamTab() {
   const rows = [gk, def, mid, fwd];
 
   const formationStr = `${def.length}-${mid.length}-${fwd.length}`;
+
+  // Club violation: any team has > 3 players in the effective squad
+  const clubViolationTeam = useMemo(() => {
+    if (!isPlanning || !activePlan) return null;
+    const counts: Record<string, number> = {};
+    for (const p of effectivePlayers) {
+      counts[p.team] = (counts[p.team] ?? 0) + 1;
+    }
+    return Object.entries(counts).find(([, n]) => n > 3)?.[0] ?? null;
+  }, [isPlanning, activePlan, effectivePlayers]);
+
+  // Budget: net cost of all planned transfers vs ITB
+  const netTransferCost = useMemo(() => {
+    if (!activePlan) return 0;
+    return (activePlan.transfers ?? []).reduce((sum, tx) => {
+      const outP     = allPlayers.find(p => p.id === tx.out);
+      const inPrice  = tx.inPlayer?.price ?? playerPool.find(pp => pp.id === tx.in)?.price ?? 0;
+      const outPrice = outP?.price ?? 0;
+      return sum + (inPrice - outPrice);
+    }, 0);
+  }, [activePlan, allPlayers, playerPool]);
 
   const executeSwap = (id1: number, id2: number) => {
     const base = activePlan ?? getDefaultPlan();
@@ -389,7 +438,7 @@ export default function MyTeamTab() {
     // Remove any previous transfer involving the same out or in player
     const newTransfers = [
       ...existingTransfers.filter(t => t.out !== outPlayer.id && t.in !== incoming.id),
-      { out: outPlayer.id, in: incoming.id },
+      { out: outPlayer.id, in: incoming.id, inPlayer: incoming },
     ];
 
     // If outgoing player was in starterIds, replace with incoming
@@ -406,6 +455,23 @@ export default function MyTeamTab() {
       captainId:     newCaptainId,
       viceCaptainId: newVCId,
     });
+  };
+
+  const handleSavePlan = () => {
+    const errors: string[] = [];
+    if (clubViolationTeam) {
+      errors.push(`More than 3 players from ${clubViolationTeam} — FPL allows a maximum of 3 per club.`);
+    }
+    if (itb > 0 && netTransferCost > itb) {
+      errors.push(`Net transfer cost £${netTransferCost.toFixed(1)}m exceeds your ITB of £${itb.toFixed(1)}m.`);
+    }
+    if (errors.length > 0) {
+      setSaveErrors(errors);
+    } else {
+      // Plan is already persisted via the useEffect in AppDataContext; just confirm
+      setSavedGW(displayGW);
+      setTimeout(() => setSavedGW(null), 2500);
+    }
   };
 
   const handlePlayerClick = (player: Player) => {
@@ -462,6 +528,9 @@ export default function MyTeamTab() {
       {squadValue > 0 && (
         <p className="text-xs text-muted-foreground mb-3">
           Squad Value <span className="font-semibold text-foreground">£{squadValue.toFixed(1)}m</span>
+          {itb > 0 && (
+            <> · ITB <span className="font-semibold text-foreground">£{itb.toFixed(1)}m</span></>
+          )}
         </p>
       )}
 
@@ -474,6 +543,18 @@ export default function MyTeamTab() {
       {swapError && (
         <div className="text-center text-xs text-danger font-semibold mb-2 animate-pulse">
           Invalid formation — swap not allowed
+        </div>
+      )}
+
+      {/* Inline validation alerts */}
+      {isPlanning && activePlan && clubViolationTeam && (
+        <div className="max-w-2xl mx-auto mb-3 px-3 py-2 rounded-xl bg-danger/15 border border-danger/40 text-danger text-xs font-semibold">
+          ⚠ More than 3 players from {clubViolationTeam} — FPL rule violation
+        </div>
+      )}
+      {isPlanning && activePlan && itb > 0 && netTransferCost > itb && (
+        <div className="max-w-2xl mx-auto mb-3 px-3 py-2 rounded-xl bg-danger/15 border border-danger/40 text-danger text-xs font-semibold">
+          ⚠ Transfer cost £{netTransferCost.toFixed(1)}m exceeds ITB £{itb.toFixed(1)}m
         </div>
       )}
 
@@ -543,13 +624,26 @@ export default function MyTeamTab() {
       </div>
 
       {isPlanning && (
-        <div className="max-w-2xl mx-auto mt-4 text-center">
+        <div className="max-w-2xl mx-auto mt-4 flex items-center justify-between">
           <button
             onClick={() => resetPlanForGW(displayGW)}
             className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
           >
-            Reset to actual squad
+            Reset
           </button>
+          <button
+            onClick={handleSavePlan}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shadow"
+          >
+            Save GW{displayGW} Plan
+          </button>
+        </div>
+      )}
+
+      {/* Saved toast */}
+      {savedGW !== null && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-full shadow-xl">
+          GW{savedGW} plan saved
         </div>
       )}
 
@@ -649,9 +743,30 @@ export default function MyTeamTab() {
           outPlayer={transferModal}
           playerPool={playerPool}
           squadIds={effectiveSquadIds}
+          squadPlayers={effectivePlayers}
           onSelect={(incoming) => executeTransfer(transferModal, incoming)}
           onClose={() => setTransferModal(null)}
         />
+      )}
+
+      {/* Save errors modal */}
+      {saveErrors.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-card border border-border rounded-2xl p-5 mx-4 max-w-sm w-full shadow-2xl">
+            <h3 className="font-bold text-sm mb-3 text-danger">Plan cannot be saved</h3>
+            <ul className="space-y-2 text-xs text-foreground">
+              {saveErrors.map((e, i) => (
+                <li key={i} className="flex gap-2"><span>⚠</span>{e}</li>
+              ))}
+            </ul>
+            <button
+              onClick={() => setSaveErrors([])}
+              className="mt-4 w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+            >
+              Fix Plan
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
