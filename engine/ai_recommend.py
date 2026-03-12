@@ -28,6 +28,16 @@ from datetime import datetime
 
 import anthropic
 
+# Load ANTHROPIC_API_KEY from .env in project root if not already in environment
+_ENV_PATH = os.path.join(os.path.dirname(__file__), "..", ".env")
+if os.path.exists(_ENV_PATH) and not os.environ.get("ANTHROPIC_API_KEY"):
+    with open(_ENV_PATH) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------

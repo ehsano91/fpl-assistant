@@ -34,6 +34,7 @@ PIPELINE = [
     os.path.join(PROJECT_ROOT, "engine", "fetch_fpl.py"),
     os.path.join(PROJECT_ROOT, "engine", "model.py"),
     os.path.join(PROJECT_ROOT, "engine", "qualitative.py"),
+    os.path.join(PROJECT_ROOT, "engine", "ai_recommend.py"),
 ]
 
 # macOS launchd identifiers
