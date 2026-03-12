@@ -31,8 +31,10 @@ export interface Player {
   opponent?:       string | null;   // opponent short name for upcoming fixture
   isHome?:         boolean | null;
   fdr?:            number | null;   // 1–5 official FPL difficulty
-  costChangeEvent?: number;
-  costChangeStart?: number;
+  costChangeEvent?:   number;
+  costChangeStart?:   number;
+  transfersInEvent?:  number;
+  transfersOutEvent?: number;
 }
 
 export interface SquadResponse {
@@ -144,8 +146,10 @@ export interface PoolPlayer {
   fitness:          FitnessStatus;
   selectedPct:      number;
   last5:            number[];
-  costChangeEvent?: number;
-  costChangeStart?: number;
+  costChangeEvent?:   number;
+  costChangeStart?:   number;
+  transfersInEvent?:  number;
+  transfersOutEvent?: number;
 }
 
 export interface PlayersResponse {

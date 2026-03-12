@@ -96,6 +96,8 @@ def create_tables(conn):
             points_per_game     TEXT,
             cost_change_event   INTEGER,
             cost_change_start   INTEGER,
+            transfers_in_event  INTEGER,
+            transfers_out_event INTEGER,
             FOREIGN KEY (team_id) REFERENCES teams(id)
         )
     """)
@@ -116,6 +118,8 @@ def create_tables(conn):
         ("points_per_game",     "TEXT"),
         ("cost_change_event",   "INTEGER"),
         ("cost_change_start",   "INTEGER"),
+        ("transfers_in_event",  "INTEGER"),
+        ("transfers_out_event", "INTEGER"),
     ]
     # Migration: add code column to teams table
     try:
@@ -233,9 +237,10 @@ def fetch_bootstrap(conn):
                  element_type, team_id, now_cost, total_points, status,
                  goals_scored, assists, clean_sheets, yellow_cards, red_cards,
                  bonus, bps, minutes, ict_index, selected_by_percent,
-                 form, points_per_game, cost_change_event, cost_change_start)
+                 form, points_per_game, cost_change_event, cost_change_start,
+                 transfers_in_event, transfers_out_event)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             p["id"], p["first_name"], p["second_name"], p["web_name"],
             p["element_type"], p["team"], p["now_cost"],
@@ -247,6 +252,7 @@ def fetch_bootstrap(conn):
             p.get("selected_by_percent", "0"), p.get("form", "0"),
             p.get("points_per_game", "0"),
             p.get("cost_change_event", 0), p.get("cost_change_start", 0),
+            p.get("transfers_in_event", 0), p.get("transfers_out_event", 0),
         ))
 
     # --- Save gameweeks ---

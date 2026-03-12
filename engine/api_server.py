@@ -285,6 +285,8 @@ def handle_squad(conn, gw=None):
             p.now_cost,
             p.cost_change_event,
             p.cost_change_start,
+            p.transfers_in_event,
+            p.transfers_out_event,
             t.short_name       AS team,
             t.code             AS team_code,
             x.xp_score,
@@ -345,8 +347,10 @@ def handle_squad(conn, gw=None):
             "opponent":        p["opponent"],
             "isHome":          bool(p["is_home"]) if p["is_home"] is not None else None,
             "fdr":             fdr,
-            "costChangeEvent": p["cost_change_event"] or 0,
-            "costChangeStart": p["cost_change_start"] or 0,
+            "costChangeEvent":   p["cost_change_event"] or 0,
+            "costChangeStart":   p["cost_change_start"] or 0,
+            "transfersInEvent":  p["transfers_in_event"] or 0,
+            "transfersOutEvent": p["transfers_out_event"] or 0,
         }
         if p["squad_pos"] <= 11:
             starters.append(player)
@@ -568,6 +572,7 @@ def handle_players(conn):
             p.id, p.web_name AS name,
             p.element_type, p.now_cost, p.total_points, p.status,
             p.cost_change_event, p.cost_change_start,
+            p.transfers_in_event, p.transfers_out_event,
             t.short_name AS team,
             t.code       AS team_code,
             x.xp_score
@@ -609,8 +614,10 @@ def handle_players(conn):
             "fitness":         FITNESS_MAP.get(r["status"], "fit"),
             "selectedPct":     0.0,   # not stored in our DB — future enhancement
             "last5":           last5,
-            "costChangeEvent": r["cost_change_event"] or 0,
-            "costChangeStart": r["cost_change_start"] or 0,
+            "costChangeEvent":   r["cost_change_event"] or 0,
+            "costChangeStart":   r["cost_change_start"] or 0,
+            "transfersInEvent":  r["transfers_in_event"] or 0,
+            "transfersOutEvent": r["transfers_out_event"] or 0,
         })
 
     return {"players": players}

@@ -43,11 +43,23 @@ function JerseyImg({ teamCode, position, size }: { teamCode?: number; position?:
 // Price change arrow
 // ---------------------------------------------------------------------------
 
-function PriceChange({ delta }: { delta: number }) {
+function PriceChange({ delta, onClick }: { delta: number; onClick?: () => void }) {
   if (!delta) return null;
   const rise = delta > 0;
+  const cls = `text-[9px] font-bold leading-none ${rise ? "text-emerald-400" : "text-rose-400"}`;
+  if (onClick) {
+    return (
+      <button
+        className={`${cls} underline-offset-2 hover:underline focus:outline-none`}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        aria-label="Price change details"
+      >
+        {rise ? "▲" : "▼"} £{(Math.abs(delta) / 10).toFixed(1)}m
+      </button>
+    );
+  }
   return (
-    <span className={`text-[9px] font-bold leading-none ${rise ? "text-emerald-400" : "text-rose-400"}`}>
+    <span className={cls}>
       {rise ? "▲" : "▼"} £{(Math.abs(delta) / 10).toFixed(1)}m
     </span>
   );
@@ -139,22 +151,24 @@ function isValidFormation(starters: Player[]): boolean {
 
 function poolPlayerToPlayer(pp: PoolPlayer): Player {
   return {
-    id:              pp.id,
-    name:            pp.name,
-    shortName:       pp.name,
-    position:        pp.position,
-    team:            pp.team,
-    teamCode:        pp.teamCode,
-    xP:              pp.xP,
-    xPForecast:      pp.last5,
-    isCaptain:       false,
-    isViceCaptain:   false,
-    fitness:         pp.fitness,
-    opponent:        null,
-    isHome:          null,
-    fdr:             null,
-    costChangeEvent: pp.costChangeEvent,
-    costChangeStart: pp.costChangeStart,
+    id:               pp.id,
+    name:             pp.name,
+    shortName:        pp.name,
+    position:         pp.position,
+    team:             pp.team,
+    teamCode:         pp.teamCode,
+    xP:               pp.xP,
+    xPForecast:       pp.last5,
+    isCaptain:        false,
+    isViceCaptain:    false,
+    fitness:          pp.fitness,
+    opponent:         null,
+    isHome:           null,
+    fdr:              null,
+    costChangeEvent:  pp.costChangeEvent,
+    costChangeStart:  pp.costChangeStart,
+    transfersInEvent: pp.transfersInEvent,
+    transfersOutEvent: pp.transfersOutEvent,
   };
 }
 
@@ -173,6 +187,7 @@ function PlayerCard({
   onSetVC,
   onTransfer,
   isPlanning,
+  onPriceClick,
 }: {
   player: Player;
   onClick: () => void;
@@ -184,6 +199,7 @@ function PlayerCard({
   onSetVC?: () => void;
   onTransfer?: () => void;
   isPlanning?: boolean;
+  onPriceClick?: (player: Player) => void;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -246,14 +262,14 @@ function PlayerCard({
         <div className="bg-primary/20 rounded-md px-2 py-0.5 mt-0.5 w-full text-center">
           <p className="text-[10px] md:text-[11px] font-bold text-primary">{player.xP} xP</p>
         </div>
-        {(player.costChangeEvent ?? 0) !== 0 && (
-          <div className="mt-0.5 w-full text-center">
-            <PriceChange delta={player.costChangeEvent ?? 0} />
-          </div>
-        )}
         {player.opponent && (
           <div className={`rounded-md px-1.5 py-0.5 mt-0.5 w-full text-center ${fdrBg[player.fdr ?? 3]}`}>
             <p className="text-[9px] font-semibold text-white">{player.isHome ? "vs" : "@"} {player.opponent}</p>
+          </div>
+        )}
+        {(player.costChangeEvent ?? 0) !== 0 && (
+          <div className="mt-0.5 w-full text-center">
+            <PriceChange delta={player.costChangeEvent ?? 0} onClick={onPriceClick ? () => onPriceClick(player) : undefined} />
           </div>
         )}
       </button>
@@ -279,6 +295,7 @@ export default function MyTeamTab() {
   const [captainMenu, setCaptainMenu]       = useState<number | null>(null);
   const [swapError, setSwapError]           = useState(false);
   const [transferModal, setTransferModal]   = useState<Player | null>(null);
+  const [pricePopover, setPricePopover]     = useState<Player | null>(null);
 
   const displayGW    = selectedGW ?? currentGW ?? gameweek;
   const isHistorical = selectedGW !== null && !isPlanning;
@@ -495,6 +512,7 @@ export default function MyTeamTab() {
                   onSetVC={() => handleSetVC(p.id)}
                   onTransfer={isPlanning ? () => setTransferModal(p) : undefined}
                   isPlanning={isPlanning}
+                  onPriceClick={setPricePopover}
                 />
               ))}
             </div>
@@ -518,6 +536,7 @@ export default function MyTeamTab() {
               onSetVC={() => handleSetVC(p.id)}
               onTransfer={isPlanning ? () => setTransferModal(p) : undefined}
               isPlanning={isPlanning}
+              onPriceClick={setPricePopover}
             />
           ))}
         </div>
@@ -562,6 +581,68 @@ export default function MyTeamTab() {
       </div>
 
       <PlayerModal player={selectedPlayer} open={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+
+      {pricePopover && (() => {
+        const p = pricePopover;
+        const rise = (p.costChangeEvent ?? 0) > 0;
+        const inEv  = p.transfersInEvent  ?? 0;
+        const outEv = p.transfersOutEvent ?? 0;
+        const net   = inEv - outEv;
+        const summary =
+          net >  50000 ? "Heavily transferred in this GW" :
+          net >  10000 ? "Net transfer in this GW" :
+          net < -50000 ? "Mass exodus this GW" :
+          net < -10000 ? "Net transfer out this GW" :
+          Math.abs(net) <= 10000 && outEv > 0 ? "Slight movement this GW" :
+          "Price change this GW";
+        return (
+          <div
+            className="fixed inset-0 z-50"
+            onClick={() => setPricePopover(null)}
+          >
+            <div
+              className="absolute bottom-20 left-1/2 -translate-x-1/2 w-72 bg-card border border-border rounded-2xl shadow-2xl p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-bold text-foreground">{p.shortName}</p>
+                  <p className="text-[10px] text-muted-foreground">{p.position} · {p.team}</p>
+                </div>
+                <button
+                  className="text-muted-foreground hover:text-foreground text-lg leading-none"
+                  onClick={() => setPricePopover(null)}
+                >✕</button>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Price change this GW</span>
+                  <span className={`font-bold ${rise ? "text-emerald-400" : "text-rose-400"}`}>
+                    {rise ? "▲" : "▼"} £{(Math.abs(p.costChangeEvent ?? 0) / 10).toFixed(1)}m
+                  </span>
+                </div>
+                {(p.costChangeStart ?? 0) !== 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Since season start</span>
+                    <span className={`font-bold ${(p.costChangeStart ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {(p.costChangeStart ?? 0) > 0 ? "▲" : "▼"} £{(Math.abs(p.costChangeStart ?? 0) / 10).toFixed(1)}m
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Transferred in this GW</span>
+                  <span className="font-semibold text-emerald-400">{inEv.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Transferred out this GW</span>
+                  <span className="font-semibold text-rose-400">{outEv.toLocaleString()}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-[11px] text-muted-foreground italic border-t border-border pt-2">{summary}</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {transferModal && (
         <TransferModal
