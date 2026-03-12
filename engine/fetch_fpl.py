@@ -65,7 +65,8 @@ def create_tables(conn):
         CREATE TABLE IF NOT EXISTS teams (
             id         INTEGER PRIMARY KEY,
             name       TEXT,
-            short_name TEXT
+            short_name TEXT,
+            code       INTEGER
         )
     """)
 
@@ -93,6 +94,8 @@ def create_tables(conn):
             selected_by_percent TEXT,
             form                TEXT,
             points_per_game     TEXT,
+            cost_change_event   INTEGER,
+            cost_change_start   INTEGER,
             FOREIGN KEY (team_id) REFERENCES teams(id)
         )
     """)
@@ -111,7 +114,15 @@ def create_tables(conn):
         ("selected_by_percent", "TEXT"),
         ("form",                "TEXT"),
         ("points_per_game",     "TEXT"),
+        ("cost_change_event",   "INTEGER"),
+        ("cost_change_start",   "INTEGER"),
     ]
+    # Migration: add code column to teams table
+    try:
+        cursor.execute("ALTER TABLE teams ADD COLUMN code INTEGER")
+        conn.commit()
+    except Exception:
+        pass  # column already exists
     for col, col_type in new_cols:
         try:
             cursor.execute(f"ALTER TABLE players ADD COLUMN {col} {col_type}")
@@ -208,9 +219,9 @@ def fetch_bootstrap(conn):
     print(f"[DB]    Saving {len(teams)} teams...")
     for t in teams:
         cursor.execute("""
-            INSERT OR REPLACE INTO teams (id, name, short_name)
-            VALUES (?, ?, ?)
-        """, (t["id"], t["name"], t["short_name"]))
+            INSERT OR REPLACE INTO teams (id, name, short_name, code)
+            VALUES (?, ?, ?, ?)
+        """, (t["id"], t["name"], t["short_name"], t.get("code")))
 
     # --- Save players ---
     players = data["elements"]
@@ -222,9 +233,9 @@ def fetch_bootstrap(conn):
                  element_type, team_id, now_cost, total_points, status,
                  goals_scored, assists, clean_sheets, yellow_cards, red_cards,
                  bonus, bps, minutes, ict_index, selected_by_percent,
-                 form, points_per_game)
+                 form, points_per_game, cost_change_event, cost_change_start)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             p["id"], p["first_name"], p["second_name"], p["web_name"],
             p["element_type"], p["team"], p["now_cost"],
@@ -235,6 +246,7 @@ def fetch_bootstrap(conn):
             p.get("minutes", 0), p.get("ict_index", "0"),
             p.get("selected_by_percent", "0"), p.get("form", "0"),
             p.get("points_per_game", "0"),
+            p.get("cost_change_event", 0), p.get("cost_change_start", 0),
         ))
 
     # --- Save gameweeks ---

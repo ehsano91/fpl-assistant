@@ -282,7 +282,11 @@ def handle_squad(conn, gw=None):
             p.element_type,
             p.status,
             p.team_id,
+            p.now_cost,
+            p.cost_change_event,
+            p.cost_change_start,
             t.short_name       AS team,
+            t.code             AS team_code,
             x.xp_score,
             x.has_fixture,
             x.is_home,
@@ -317,33 +321,44 @@ def handle_squad(conn, gw=None):
         return scores[:6]
 
     starters, bench = [], []
+    total_cost = 0
 
     for p in picks:
         fdr = None
         if p["has_fixture"] and p["team_id"] and p["opponent_id"]:
             fdr = get_official_fdr(conn, p["team_id"], p["opponent_id"], xp_gw)
 
+        total_cost += p["now_cost"] or 0
+
         player = {
-            "id":            p["player_id"],
-            "name":          p["full_name"],
-            "shortName":     p["web_name"],
-            "position":      POSITION_MAP.get(p["element_type"], "MID"),
-            "team":          p["team"],
-            "xP":            round(p["xp_score"] or 0, 2),
-            "xPForecast":    xp_forecast(p["player_id"]),
-            "isCaptain":     bool(p["is_captain"]),
-            "isViceCaptain": bool(p["is_vice_captain"]),
-            "fitness":       FITNESS_MAP.get(p["status"], "fit"),
-            "opponent":      p["opponent"],
-            "isHome":        bool(p["is_home"]) if p["is_home"] is not None else None,
-            "fdr":           fdr,
+            "id":              p["player_id"],
+            "name":            p["full_name"],
+            "shortName":       p["web_name"],
+            "position":        POSITION_MAP.get(p["element_type"], "MID"),
+            "team":            p["team"],
+            "teamCode":        p["team_code"],
+            "xP":              round(p["xp_score"] or 0, 2),
+            "xPForecast":      xp_forecast(p["player_id"]),
+            "isCaptain":       bool(p["is_captain"]),
+            "isViceCaptain":   bool(p["is_vice_captain"]),
+            "fitness":         FITNESS_MAP.get(p["status"], "fit"),
+            "opponent":        p["opponent"],
+            "isHome":          bool(p["is_home"]) if p["is_home"] is not None else None,
+            "fdr":             fdr,
+            "costChangeEvent": p["cost_change_event"] or 0,
+            "costChangeStart": p["cost_change_start"] or 0,
         }
         if p["squad_pos"] <= 11:
             starters.append(player)
         else:
             bench.append(player)
 
-    result = {"gameweek": gw if gw is not None else next_gw, "starters": starters, "bench": bench}
+    result = {
+        "gameweek":   gw if gw is not None else next_gw,
+        "starters":   starters,
+        "bench":      bench,
+        "squadValue": round(total_cost / 10, 1),
+    }
 
     if is_historical:
         try:
@@ -552,7 +567,9 @@ def handle_players(conn):
         SELECT
             p.id, p.web_name AS name,
             p.element_type, p.now_cost, p.total_points, p.status,
+            p.cost_change_event, p.cost_change_start,
             t.short_name AS team,
+            t.code       AS team_code,
             x.xp_score
         FROM players p
         JOIN teams t ON p.team_id = t.id
@@ -581,16 +598,19 @@ def handle_players(conn):
             last5.append(0.0)
 
         players.append({
-            "id":          r["id"],
-            "name":        r["name"],
-            "team":        r["team"],
-            "position":    POSITION_MAP.get(r["element_type"], "MID"),
-            "price":       round((r["now_cost"] or 0) / 10, 1),
-            "xP":          round(r["xp_score"] or 0, 2),
-            "form":        round((r["total_points"] or 0) / games_played, 1),
-            "fitness":     FITNESS_MAP.get(r["status"], "fit"),
-            "selectedPct": 0.0,   # not stored in our DB — future enhancement
-            "last5":       last5,
+            "id":              r["id"],
+            "name":            r["name"],
+            "team":            r["team"],
+            "teamCode":        r["team_code"],
+            "position":        POSITION_MAP.get(r["element_type"], "MID"),
+            "price":           round((r["now_cost"] or 0) / 10, 1),
+            "xP":              round(r["xp_score"] or 0, 2),
+            "form":            round((r["total_points"] or 0) / games_played, 1),
+            "fitness":         FITNESS_MAP.get(r["status"], "fit"),
+            "selectedPct":     0.0,   # not stored in our DB — future enhancement
+            "last5":           last5,
+            "costChangeEvent": r["cost_change_event"] or 0,
+            "costChangeStart": r["cost_change_start"] or 0,
         })
 
     return {"players": players}

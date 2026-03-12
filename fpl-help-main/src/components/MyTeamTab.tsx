@@ -1,35 +1,123 @@
 import { useState, useRef, useMemo } from "react";
 import { useAppData } from "@/context/AppDataContext";
 import type { PlanState } from "@/context/AppDataContext";
-import type { Player } from "@/lib/api";
+import type { Player, PoolPlayer, Position } from "@/lib/api";
 import PlayerModal from "./PlayerModal";
 
-const teamColors: Record<string, { primary: string; secondary: string }> = {
-  LIV: { primary: "#C8102E", secondary: "#C8102E" },
-  ARS: { primary: "#EF0107", secondary: "#FFFFFF" },
-  MCI: { primary: "#6CABDD", secondary: "#6CABDD" },
-  CHE: { primary: "#034694", secondary: "#034694" },
-  NEW: { primary: "#241F20", secondary: "#FFFFFF" },
-  AVL: { primary: "#670E36", secondary: "#95BFE5" },
-  TOT: { primary: "#FFFFFF", secondary: "#132257" },
-  WHU: { primary: "#7A263A", secondary: "#1BB1E7" },
-  BRE: { primary: "#E30613", secondary: "#FFFFFF" },
-  FUL: { primary: "#000000", secondary: "#FFFFFF" },
-};
+// ---------------------------------------------------------------------------
+// Jersey image using the official FPL CDN
+// ---------------------------------------------------------------------------
 
-function JerseySVG({ team, size }: { team: string; size: number }) {
-  const colors = teamColors[team] || { primary: "#888", secondary: "#CCC" };
+function JerseyImg({ teamCode, position, size }: { teamCode?: number; position?: string; size: number }) {
+  const [errored, setErrored] = useState(false);
+  if (!teamCode || errored) {
+    // Fallback: coloured circle with position label
+    const bg = position === "GK" ? "#f5a623" : position === "DEF" ? "#4a90d9" : position === "MID" ? "#7ed321" : "#d0021b";
+    return (
+      <div
+        style={{ width: size, height: size, background: bg }}
+        className="rounded-full flex items-center justify-center text-white font-bold drop-shadow-lg"
+        aria-hidden
+      >
+        <span style={{ fontSize: Math.max(8, size / 4) }}>{position ?? "?"}</span>
+      </div>
+    );
+  }
+  const isGK = position === "GK";
+  const src = isGK
+    ? `https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${teamCode}_1-66.png`
+    : `https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${teamCode}-66.png`;
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" className="drop-shadow-lg">
-      <path d="M8 12 L0 24 L8 28 L12 18 Z" fill={colors.secondary} />
-      <path d="M56 12 L64 24 L56 28 L52 18 Z" fill={colors.secondary} />
-      <path d="M12 12 L12 56 Q12 60 16 60 L48 60 Q52 60 52 56 L52 12 L44 8 Q32 4 20 8 Z" fill={colors.primary} />
-      <path d="M20 8 Q32 4 44 8 L40 14 Q32 10 24 14 Z" fill={colors.secondary} />
-      <path d="M12 12 L20 8" stroke={colors.secondary} strokeWidth="1" />
-      <path d="M52 12 L44 8" stroke={colors.secondary} strokeWidth="1" />
-    </svg>
+    <img
+      src={src}
+      width={size}
+      height={size}
+      alt=""
+      className="drop-shadow-lg"
+      onError={() => setErrored(true)}
+    />
   );
 }
+
+// ---------------------------------------------------------------------------
+// Price change arrow
+// ---------------------------------------------------------------------------
+
+function PriceChange({ delta }: { delta: number }) {
+  if (!delta) return null;
+  const rise = delta > 0;
+  return (
+    <span className={`text-[9px] font-bold leading-none ${rise ? "text-emerald-400" : "text-rose-400"}`}>
+      {rise ? "▲" : "▼"} £{(Math.abs(delta) / 10).toFixed(1)}m
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Transfer modal (bottom sheet)
+// ---------------------------------------------------------------------------
+
+function TransferModal({
+  outPlayer,
+  playerPool,
+  squadIds,
+  onSelect,
+  onClose,
+}: {
+  outPlayer: Player;
+  playerPool: PoolPlayer[];
+  squadIds: number[];
+  onSelect: (p: PoolPlayer) => void;
+  onClose: () => void;
+}) {
+  const filtered = playerPool
+    .filter(p => p.position === outPlayer.position && !squadIds.includes(p.id))
+    .sort((a, b) => b.xP - a.xP);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50" onClick={onClose}>
+      <div
+        className="bg-card rounded-t-2xl max-h-[70vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border">
+          <div>
+            <h3 className="font-bold text-sm">Transfer out: {outPlayer.shortName}</h3>
+            <p className="text-[11px] text-muted-foreground">Select a {outPlayer.position} to bring in</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg leading-none">✕</button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-3 py-2 space-y-1">
+          {filtered.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-6">No players available</p>
+          )}
+          {filtered.map(p => (
+            <button
+              key={p.id}
+              onClick={() => { onSelect(p); onClose(); }}
+              className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors"
+            >
+              <JerseyImg teamCode={p.teamCode} position={p.position} size={36} />
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-semibold truncate">{p.name}</p>
+                <p className="text-[11px] text-muted-foreground">{p.team}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs font-semibold">£{p.price}m</p>
+                <p className="text-xs text-primary font-bold">{p.xP} xP</p>
+                <PriceChange delta={p.costChangeEvent ?? 0} />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 const fitnessColors = { fit: "bg-primary", doubt: "bg-caution", out: "bg-danger" };
 
@@ -49,22 +137,53 @@ function isValidFormation(starters: Player[]): boolean {
   return gk === 1 && def >= 3 && def <= 5 && mid >= 2 && mid <= 5 && fwd >= 1 && fwd <= 3 && starters.length === 11;
 }
 
+function poolPlayerToPlayer(pp: PoolPlayer): Player {
+  return {
+    id:              pp.id,
+    name:            pp.name,
+    shortName:       pp.name,
+    position:        pp.position,
+    team:            pp.team,
+    teamCode:        pp.teamCode,
+    xP:              pp.xP,
+    xPForecast:      pp.last5,
+    isCaptain:       false,
+    isViceCaptain:   false,
+    fitness:         pp.fitness,
+    opponent:        null,
+    isHome:          null,
+    fdr:             null,
+    costChangeEvent: pp.costChangeEvent,
+    costChangeStart: pp.costChangeStart,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PlayerCard
+// ---------------------------------------------------------------------------
+
 function PlayerCard({
   player,
   onClick,
   isSelected,
+  isTransferred,
   showCaptainMenu,
   onLongPress,
   onSetCaptain,
   onSetVC,
+  onTransfer,
+  isPlanning,
 }: {
   player: Player;
   onClick: () => void;
   isSelected?: boolean;
+  isTransferred?: boolean;
   showCaptainMenu?: boolean;
   onLongPress?: () => void;
   onSetCaptain?: () => void;
   onSetVC?: () => void;
+  onTransfer?: () => void;
+  isPlanning?: boolean;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -98,7 +217,7 @@ function PlayerCard({
         className={`relative flex flex-col items-center cursor-pointer hover:scale-105 transition-transform group w-[80px] md:w-[100px] ${isSelected ? "scale-105 drop-shadow-[0_0_6px_hsl(45,100%,60%)]" : ""}`}
       >
         <div className="relative">
-          <JerseySVG team={player.team} size={48} />
+          <JerseyImg teamCode={player.teamCode} position={player.position} size={48} />
           {isSelected && (
             <div className="absolute inset-0 rounded-full ring-2 ring-caution ring-offset-1 ring-offset-transparent pointer-events-none" />
           )}
@@ -108,6 +227,17 @@ function PlayerCard({
           {player.isViceCaptain && (
             <span className="absolute -top-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full bg-muted text-foreground text-[10px] md:text-[11px] font-bold flex items-center justify-center shadow-md border-2 border-background">V</span>
           )}
+          {isTransferred && (
+            <span className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-violet-500 text-white text-[9px] font-bold flex items-center justify-center shadow-md border-2 border-background">↕</span>
+          )}
+          {/* Transfer button — only in planning mode */}
+          {isPlanning && onTransfer && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTransfer(); }}
+              className="absolute -bottom-1 -left-1 w-5 h-5 rounded-full bg-card/90 border border-border text-[10px] flex items-center justify-center hover:bg-violet-500 hover:text-white hover:border-violet-500 transition-colors z-20 shadow"
+              title="Transfer"
+            >↕</button>
+          )}
           <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ${fitnessColors[player.fitness]} border border-background`} />
         </div>
         <div className="bg-card/90 backdrop-blur-sm rounded-md px-2 py-0.5 mt-1 w-full text-center shadow-md">
@@ -116,6 +246,11 @@ function PlayerCard({
         <div className="bg-primary/20 rounded-md px-2 py-0.5 mt-0.5 w-full text-center">
           <p className="text-[10px] md:text-[11px] font-bold text-primary">{player.xP} xP</p>
         </div>
+        {(player.costChangeEvent ?? 0) !== 0 && (
+          <div className="mt-0.5 w-full text-center">
+            <PriceChange delta={player.costChangeEvent ?? 0} />
+          </div>
+        )}
         {player.opponent && (
           <div className={`rounded-md px-1.5 py-0.5 mt-0.5 w-full text-center ${fdrBg[player.fdr ?? 3]}`}>
             <p className="text-[9px] font-semibold text-white">{player.isHome ? "vs" : "@"} {player.opponent}</p>
@@ -126,18 +261,24 @@ function PlayerCard({
   );
 }
 
+// ---------------------------------------------------------------------------
+// MyTeamTab
+// ---------------------------------------------------------------------------
+
 export default function MyTeamTab() {
   const {
-    myTeam, bench, gameweek,
+    myTeam, bench, gameweek, squadValue,
     selectedGW, currentGW, gwPoints,
     totalPoints, overallRank, swedenRank, leagues,
     isPlanning, planningState, setPlanForGW, resetPlanForGW,
+    playerPool,
   } = useAppData();
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [swapSource, setSwapSource]         = useState<number | null>(null);
   const [captainMenu, setCaptainMenu]       = useState<number | null>(null);
   const [swapError, setSwapError]           = useState(false);
+  const [transferModal, setTransferModal]   = useState<Player | null>(null);
 
   const displayGW    = selectedGW ?? currentGW ?? gameweek;
   const isHistorical = selectedGW !== null && !isPlanning;
@@ -148,15 +289,35 @@ export default function MyTeamTab() {
     captainId:     myTeam.find(p => p.isCaptain)?.id     ?? myTeam[0]?.id ?? 0,
     viceCaptainId: myTeam.find(p => p.isViceCaptain)?.id ?? myTeam[1]?.id ?? 0,
     starterIds:    myTeam.map(p => p.id),
+    transfers:     [],
   });
 
   const activePlan = isPlanning ? (planningState[displayGW] ?? null) : null;
+
+  // Apply transfers to get the effective 15-player list
+  const effectivePlayers = useMemo(() => {
+    if (!isPlanning || !activePlan) return allPlayers;
+    const transfers = activePlan.transfers ?? [];
+    return allPlayers.map(p => {
+      const tx = transfers.find(t => t.out === p.id);
+      if (tx) {
+        const incoming = playerPool.find(pp => pp.id === tx.in);
+        if (incoming) return poolPlayerToPlayer(incoming);
+      }
+      return p;
+    });
+  }, [isPlanning, activePlan, allPlayers, playerPool]);
+
+  const transferredInIds = useMemo(() => {
+    if (!activePlan) return new Set<number>();
+    return new Set((activePlan.transfers ?? []).map(t => t.in));
+  }, [activePlan]);
 
   const { displayedStarters, displayedBench } = useMemo(() => {
     if (!isPlanning || !activePlan) {
       return { displayedStarters: myTeam, displayedBench: bench };
     }
-    const withCaptain = allPlayers.map(p => ({
+    const withCaptain = effectivePlayers.map(p => ({
       ...p,
       isCaptain:     p.id === activePlan.captainId,
       isViceCaptain: p.id === activePlan.viceCaptainId,
@@ -165,7 +326,7 @@ export default function MyTeamTab() {
       displayedStarters: withCaptain.filter(p => activePlan.starterIds.includes(p.id)),
       displayedBench:    withCaptain.filter(p => !activePlan.starterIds.includes(p.id)),
     };
-  }, [isPlanning, activePlan, allPlayers, myTeam, bench]);
+  }, [isPlanning, activePlan, effectivePlayers, myTeam, bench]);
 
   const gk  = displayedStarters.filter(p => p.position === "GK");
   const def = displayedStarters.filter(p => p.position === "DEF");
@@ -183,7 +344,6 @@ export default function MyTeamTab() {
     const newStarters = [...base.starterIds];
 
     if (id1IsStarter === id2IsStarter) {
-      // Swap within the same group (reorder only — no formation change)
       const i1 = newStarters.indexOf(id1);
       const i2 = newStarters.indexOf(id2);
       if (i1 !== -1 && i2 !== -1) [newStarters[i1], newStarters[i2]] = [newStarters[i2], newStarters[i1]];
@@ -191,19 +351,44 @@ export default function MyTeamTab() {
       return;
     }
 
-    // One starter ↔ one bench player
     const starterId = id1IsStarter ? id1 : id2;
     const benchId   = id1IsStarter ? id2 : id1;
     const idx = newStarters.indexOf(starterId);
     newStarters[idx] = benchId;
 
-    const proposed = allPlayers.filter(p => newStarters.includes(p.id));
+    const proposed = effectivePlayers.filter(p => newStarters.includes(p.id));
     if (!isValidFormation(proposed)) {
       setSwapError(true);
       setTimeout(() => setSwapError(false), 1800);
       return;
     }
     setPlanForGW(displayGW, { ...base, starterIds: newStarters });
+  };
+
+  const executeTransfer = (outPlayer: Player, incoming: PoolPlayer) => {
+    const base = activePlan ?? getDefaultPlan();
+    const existingTransfers = base.transfers ?? [];
+
+    // Remove any previous transfer involving the same out or in player
+    const newTransfers = [
+      ...existingTransfers.filter(t => t.out !== outPlayer.id && t.in !== incoming.id),
+      { out: outPlayer.id, in: incoming.id },
+    ];
+
+    // If outgoing player was in starterIds, replace with incoming
+    const newStarters = base.starterIds.map(id => id === outPlayer.id ? incoming.id : id);
+
+    // Update captain/VC if they were the outgoing player
+    const newCaptainId    = base.captainId    === outPlayer.id ? incoming.id : base.captainId;
+    const newVCId         = base.viceCaptainId === outPlayer.id ? incoming.id : base.viceCaptainId;
+
+    setPlanForGW(displayGW, {
+      ...base,
+      transfers:     newTransfers,
+      starterIds:    newStarters,
+      captainId:     newCaptainId,
+      viceCaptainId: newVCId,
+    });
   };
 
   const handlePlayerClick = (player: Player) => {
@@ -237,9 +422,12 @@ export default function MyTeamTab() {
     setCaptainMenu(null);
   };
 
+  // IDs currently in the effective squad (to exclude from transfer modal)
+  const effectiveSquadIds = effectivePlayers.map(p => p.id);
+
   return (
     <div className="pb-4 px-4" onClick={() => { if (captainMenu !== null) setCaptainMenu(null); }}>
-      <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2 flex-wrap">
+      <h2 className="text-xl font-bold text-foreground mb-1 flex items-center gap-2 flex-wrap">
         My Team — {displayGW ? `GW${displayGW}` : "—"}
         {isHistorical && gwPoints !== null && (
           <span className="text-sm font-semibold bg-primary/20 text-primary rounded-full px-2 py-0.5">
@@ -253,9 +441,16 @@ export default function MyTeamTab() {
         )}
       </h2>
 
+      {/* Squad value */}
+      {squadValue > 0 && (
+        <p className="text-xs text-muted-foreground mb-3">
+          Squad Value <span className="font-semibold text-foreground">£{squadValue.toFixed(1)}m</span>
+        </p>
+      )}
+
       {isPlanning && (
         <p className="text-[11px] text-muted-foreground mb-3 text-center">
-          Tap a player to swap · Long-press for captain / VC
+          Tap to swap · Long-press for C/VC · ↕ to transfer
         </p>
       )}
 
@@ -293,10 +488,13 @@ export default function MyTeamTab() {
                   player={p}
                   onClick={() => handlePlayerClick(p)}
                   isSelected={isPlanning && swapSource === p.id}
+                  isTransferred={transferredInIds.has(p.id)}
                   showCaptainMenu={isPlanning && captainMenu === p.id}
                   onLongPress={isPlanning ? () => handleLongPress(p.id) : undefined}
                   onSetCaptain={() => handleSetCaptain(p.id)}
                   onSetVC={() => handleSetVC(p.id)}
+                  onTransfer={isPlanning ? () => setTransferModal(p) : undefined}
+                  isPlanning={isPlanning}
                 />
               ))}
             </div>
@@ -313,10 +511,13 @@ export default function MyTeamTab() {
               player={p}
               onClick={() => handlePlayerClick(p)}
               isSelected={isPlanning && swapSource === p.id}
+              isTransferred={transferredInIds.has(p.id)}
               showCaptainMenu={isPlanning && captainMenu === p.id}
               onLongPress={isPlanning ? () => handleLongPress(p.id) : undefined}
               onSetCaptain={() => handleSetCaptain(p.id)}
               onSetVC={() => handleSetVC(p.id)}
+              onTransfer={isPlanning ? () => setTransferModal(p) : undefined}
+              isPlanning={isPlanning}
             />
           ))}
         </div>
@@ -361,6 +562,16 @@ export default function MyTeamTab() {
       </div>
 
       <PlayerModal player={selectedPlayer} open={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+
+      {transferModal && (
+        <TransferModal
+          outPlayer={transferModal}
+          playerPool={playerPool}
+          squadIds={effectiveSquadIds}
+          onSelect={(incoming) => executeTransfer(transferModal, incoming)}
+          onClose={() => setTransferModal(null)}
+        />
+      )}
     </div>
   );
 }

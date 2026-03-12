@@ -17,19 +17,22 @@ export type FitnessStatus = "fit" | "doubt" | "out";
 export type RecType       = "transfer_in" | "transfer_out" | "captain" | "starting_xi" | "chip_alert" | "community_buzz";
 
 export interface Player {
-  id:            number;
-  name:          string;
-  shortName:     string;
-  position:      Position;
-  team:          string;
-  xP:            number;
-  xPForecast:    number[];
-  isCaptain:     boolean;
-  isViceCaptain: boolean;
-  fitness:       FitnessStatus;
-  opponent?:     string | null;   // opponent short name for upcoming fixture
-  isHome?:       boolean | null;
-  fdr?:          number | null;   // 1–5 official FPL difficulty
+  id:              number;
+  name:            string;
+  shortName:       string;
+  position:        Position;
+  team:            string;
+  teamCode?:       number;
+  xP:              number;
+  xPForecast:      number[];
+  isCaptain:       boolean;
+  isViceCaptain:   boolean;
+  fitness:         FitnessStatus;
+  opponent?:       string | null;   // opponent short name for upcoming fixture
+  isHome?:         boolean | null;
+  fdr?:            number | null;   // 1–5 official FPL difficulty
+  costChangeEvent?: number;
+  costChangeStart?: number;
 }
 
 export interface SquadResponse {
@@ -39,6 +42,7 @@ export interface SquadResponse {
   points?:       number;       // actual GW points (only for historical GWs)
   isHistorical?: boolean;
   isPlanning?:   boolean;      // true when viewing a future (unplayed) GW
+  squadValue?:   number;
 }
 
 export interface GWHistory {
@@ -129,16 +133,19 @@ export interface StatusResponse {
 }
 
 export interface PoolPlayer {
-  id:          number;
-  name:        string;
-  team:        string;
-  position:    Position;
-  price:       number;
-  xP:          number;
-  form:        number;
-  fitness:     FitnessStatus;
-  selectedPct: number;
-  last5:       number[];
+  id:               number;
+  name:             string;
+  team:             string;
+  teamCode?:        number;
+  position:         Position;
+  price:            number;
+  xP:               number;
+  form:             number;
+  fitness:          FitnessStatus;
+  selectedPct:      number;
+  last5:            number[];
+  costChangeEvent?: number;
+  costChangeStart?: number;
 }
 
 export interface PlayersResponse {
