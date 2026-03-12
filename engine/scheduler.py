@@ -110,6 +110,15 @@ def run_pipeline():
     print(f"  db/fpl.db is up to date.")
     print(f"  Restart engine/api_server.py to serve fresh data.\n")
 
+    # If called from api_server's Refresh Now button, delete the lock file.
+    lock_arg = next((a for a in sys.argv if a.startswith("--lock-file=")), None)
+    if lock_arg:
+        lock_path = lock_arg.split("=", 1)[1]
+        try:
+            os.remove(lock_path)
+        except FileNotFoundError:
+            pass
+
 
 # ---------------------------------------------------------------------------
 # macOS launchd installer

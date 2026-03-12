@@ -1113,35 +1113,24 @@ def _pipeline_is_running():
     return age < 600   # auto-expire after 10 min in case of crash
 
 
-def _run_pipeline():
-    scripts = [
-        os.path.join(_PROJECT_ROOT, "engine", "fetch_fpl.py"),
-        os.path.join(_PROJECT_ROOT, "engine", "model.py"),
-        os.path.join(_PROJECT_ROOT, "engine", "qualitative.py"),
-    ]
-    try:
-        for script in scripts:
-            result = subprocess.run(
-                [sys.executable, script],
-                cwd=_PROJECT_ROOT,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            if result.returncode != 0:
-                break
-    finally:
-        try:
-            os.remove(_PIPELINE_LOCK_FILE)
-        except FileNotFoundError:
-            pass
-
-
 def handle_refresh():
     with _pipeline_lock:
         if _pipeline_is_running():
             return {"status": "running"}
         open(_PIPELINE_LOCK_FILE, "w").close()   # create lock file
-    threading.Thread(target=_run_pipeline, daemon=True).start()
+
+    # Run scheduler.py as a fully detached process — survives server restarts.
+    # scheduler.py will delete the lock file when it finishes.
+    subprocess.Popen(
+        [sys.executable,
+         os.path.join(_PROJECT_ROOT, "engine", "scheduler.py"),
+         "--test",
+         f"--lock-file={_PIPELINE_LOCK_FILE}"],
+        cwd=_PROJECT_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,   # detach from server process group
+    )
     return {"status": "started"}
 
 
