@@ -600,81 +600,13 @@ def handle_players(conn):
 
 def handle_recommend(conn):
     """
-    Returns AI recommendations from the ai_recommendations table if available
-    for the current GW, otherwise falls back to heuristic recommendations.
+    Generate 3–4 plain-English recommendations using heuristics:
+      1. Captain pick   — highest-xP squad player with a fixture
+      2. Transfer out   — injured/blank-GW starter
+      3. Transfer in    — best non-squad player at the same position
+      4. Starting XI    — bench player who outscores a blank-GW starter
     """
     next_gw = get_next_gw(conn)
-    if not next_gw:
-        return {"recommendations": []}
-
-    # --- Try AI recommendations first --------------------------------------
-    ai = None
-    try:
-        cur0 = conn.cursor()
-        cur0.execute("""
-            SELECT transfer_in, transfer_out, captain, starting_xi, daily_briefing
-            FROM ai_recommendations
-            WHERE gameweek = ?
-        """, (next_gw,))
-        ai = cur0.fetchone()
-    except Exception:
-        pass  # table doesn't exist yet — fall through to heuristic
-    if ai and ai["captain"]:
-        import json as _json
-        ti   = _json.loads(ai["transfer_in"]  or "{}")
-        to_  = _json.loads(ai["transfer_out"] or "{}")
-        cap  = _json.loads(ai["captain"]      or "{}")
-        xi   = _json.loads(ai["starting_xi"]  or "{}")
-        recs = []
-        if cap.get("player"):
-            conf = cap.get("confidence_pct", "")
-            conf_label = f" ({conf}% confidence)" if conf else ""
-            recs.append({
-                "id": 1, "type": "captain",
-                "title":     f"Captain Pick: {cap['player']}{conf_label}",
-                "summary":   cap.get("reason", ""),
-                "reasoning": cap.get("reason", ""),
-                "positive":  True,
-            })
-        if ti.get("player"):
-            recs.append({
-                "id": 2, "type": "transfer_in",
-                "title":     f"Transfer In: {ti['player']}",
-                "summary":   ti.get("reason", ""),
-                "reasoning": ti.get("reason", ""),
-                "positive":  True,
-            })
-        if to_.get("player"):
-            recs.append({
-                "id": 3, "type": "transfer_out",
-                "title":     f"Consider Selling: {to_['player']}",
-                "summary":   to_.get("reason", ""),
-                "reasoning": to_.get("reason", ""),
-                "positive":  False,
-            })
-        if xi.get("reasoning"):
-            players    = xi.get("players", [])
-            xi_summary = xi["reasoning"]
-            if players:
-                xi_summary = f"Starters: {', '.join(players[:4])}… | {xi['reasoning']}"
-            recs.append({
-                "id": 4, "type": "starting_xi",
-                "title":     "Recommended XI",
-                "summary":   xi_summary,
-                "reasoning": xi["reasoning"],
-                "positive":  True,
-            })
-        if ai["daily_briefing"]:
-            recs.append({
-                "id": 5, "type": "community_buzz",
-                "title":     "AI Daily Briefing",
-                "summary":   ai["daily_briefing"],
-                "reasoning": ai["daily_briefing"],
-                "positive":  True,
-            })
-        return {"recommendations": recs}
-
-    # --- Fallback: heuristic recommendations --------------------------------
 
     cur = conn.cursor()
     cur.execute("""
